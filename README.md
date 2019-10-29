@@ -3,7 +3,7 @@ Example of visualisations and analysis using a short time series available from 
 
 RStudio: [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/G-Brennan/Metabarcoding_group_UCDavis/master?urlpath=rstudio)
 
-Binder: [![Binder](http://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/G-Brennan/Metabarcoding_Oct2019.git/master)
+Binder: [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/G-Brennan/Metabarcoding_TARA_Oceans_TimeSeries.git/master)
 
 
 Quick Start
