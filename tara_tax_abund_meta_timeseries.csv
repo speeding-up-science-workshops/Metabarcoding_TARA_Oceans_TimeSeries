@@ -1,0 +1,5 @@
+,Time,TimeGMT,Date,SampleID,LatitudeN,LongitudeE ,MinDepth,MaxDepth_m,Sample type,method,Min Size,Max Size
+ERR315851,morning,10:41,12/15/2009,ERR315851,42.1735,17.7252,53,57,marine biome,High Volume Peristaltic Pump,1.6,20
+ERR315852,afternoon,13:50,11/18/2009,ERR315852,33.9179,32.898,7,7,marine biome,High Volume Peristaltic Pump,1.6,20
+ERR315854,afternoon,12:50,9/23/2009,ERR315854,37.051,1.9378,7,7,marine biome,High Volume Peristaltic Pump,0.22,1.6
+ERR315855,evening,16:08,9/23/2009,ERR315855,37.051,1.9378,40,44,marine biome,High Volume Peristaltic Pump,0.22,1.6
