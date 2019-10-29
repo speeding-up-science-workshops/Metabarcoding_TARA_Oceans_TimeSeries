@@ -1,0 +1,579 @@
+---
+title: "Metabarcoding_data_SpeedingUpScience"
+author: "Georgina"
+date: "10/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Load packages
+```{r, results='hide',message=FALSE}
+library(ggplot2)
+library(reshape2)
+library(tidyr)
+#library(tidyverse)
+library(RColorBrewer)
+#library(cowplot)
+#library(grid)
+library(plyr)
+library(zoo)
+library(mvabund)
+
+
+```
+load tree height metabarcoding count data and the mapping file or metadata
+
+```{r}
+
+OTUdata<-read.csv("tara_tax_abund_timeseries.csv", row.names = 1, check.names =FALSE)
+str(OTUdata)
+
+meta<-read.table("tara_tax_abund_meta_timeseries.csv",row.names = 1, sep=",", header= TRUE)
+names(meta)
+#turn date into a date formate in R
+meta$Date <- as.Date(meta$Date, "%m/%d/%Y") 
+
+
+#Read in the tax ID - we removed this at the begining before we tranposed the data
+
+taxalist <- read.csv("tara_taxalist_timeseries.csv", header=T)
+
+```
+TIP: if you have a time series with dates that you want to plot use the following code using the as.Date function 
+# > df$Date <- as.Date(df$Date, "%d/%m/%Y") 
+# add some columns related to time. 
+# code copied from: http://jason-doug-climate.blogspot.com/ 
+
+```{r}
+
+
+meta$Date2 <- as.POSIXct(meta$Date, format = "%m/%d/%Y")
+
+meta$year<-as.numeric(as.POSIXlt(meta$Date2)$year+1900)
+meta$yearf<-as.factor(meta$year)
+meta$month<-as.numeric(as.POSIXlt(meta$Date2)$mon+1)
+meta$monthf<-factor(meta$month,levels=as.character(1:12),labels=c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"),ordered=TRUE)
+meta$weekday = as.numeric(format(as.POSIXlt(meta$Date2),"%u"))
+meta$yearmonth<-as.yearmon(meta$Date2)
+meta$yearmonthf<-factor(meta$yearmonth)
+meta$week <- as.numeric(format(as.POSIXlt(meta$Date2),"%W"))
+meta$day = strftime(meta$Date2,'%A')
+meta$jday <- strptime(meta$Date2, "%Y-%m-%d")$yday+1
+```
+Remove taxonomy before transposing the data
+```{r}
+OTUdata$taxonomy<-NULL
+
+```
+Transpose the data to have sample names on rows
+
+```{r}
+OTUt<-as.data.frame(t(OTUdata))
+
+```
+Apply proportion normalisation
+
+```{r}
+OTUdata<-OTUt/rowSums(OTUt)
+OTUdata<-OTUdata[,order(colSums(OTUdata),decreasing=TRUE)]
+```
+#Extract list of top N Taxa
+
+```{r}
+N<-20
+taxa_list<-colnames(OTUdata)[1:N]
+N<-length(taxa_list)
+```
+
+Generate a new table with everything in the top N list
+
+```{r}
+
+abundOTU_N20<-data.frame(OTUdata[,colnames(OTUdata) %in% taxa_list])
+names(abundOTU_N20)
+
+```
+Decide how you want to filter your data for visualization 
+Here I am looking at the most the most abundant OTUS - top 20 abundant OTUs across all sampling ID's
+
+```{r}
+abundOTU_N20$Index<-rownames(abundOTU_N20)
+meta$SampleID<-rownames(meta)
+
+OTUt.prop_N20 <- merge(meta, abundOTU_N20, by.y = 'Index', by.x = "SampleID", all=FALSE)
+
+# check for errors in merging data by looking for missing data
+sum(is.na(OTUt.prop_N20$Date)) # 0 missing data 
+
+```
+make data frame into a long format for plotting and statistical analysis 
+Here we have the OTUs in columns 15 to the Nth column in the data.frame. This should be edited if you change the input file
+
+```{r}
+names(OTUt.prop_N20)
+OTU.long_N20 <- gather(OTUt.prop_N20, Taxa, proportion, 24:43, factor_key=TRUE)
+
+names(OTU.long_N20)
+
+```
+
+Merge the tax ID with the data based on the OTU ID
+
+```{r}
+OTU.long_N20<-merge(OTU.long_N20, taxalist, by.x = "Taxa", by.y = "OTU")
+
+```
+
+Load some pretty colours
+
+```{r}
+colours29 <- c("#404142", "#2f4b7c", "#a05195", "#ff7c43", "#665191", "#e0e084",
+               "#c68d23", "#8DD3C7", "#9894ae", "#FB8072", "#80B1D3", "#f95d6a", "#B3DE69", "#FCCDE5", 
+               "#D9D9D9", "#BC80BD", "#CCEBC5", "#d45087", "#FFED6F", "#1F78B4", "#33A02C", "#FB9A99", 
+               "#FDBF6F", "#FF7F00", "#a51213", "#CAB2D6", "#77a070", "#B15928", "#003f5c")
+```
+
+
+Start plotting data 
+
+1) abundance graph to visualise the abundant taxa over time.
+
+Here, I have faceted (created multiple panel in the plot) using Phylum and coloured the denisty plot with Family (inlcuding a legend)
+
+
+```{r}
+
+
+P1<-ggplot(OTU.long_N20,aes(Date2,proportion,fill=Family, col=Family)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion of Sequence Reads")+
+  #ylim(0,4.5e+06)+
+  facet_wrap( . ~ Phylum , ncol=3, scales = "free_y") +
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  scale_fill_manual(values= colours29)+
+  scale_colour_manual(values= colours29)+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain")) #vertical axis label, grey, size 20, no angle etc.
+
+P1
+
+```
+
+2) Have a look at the biological replicates - one option is to use the facet function:
+
+```{r}
+
+P2<-ggplot(OTU.long_N20,aes(Date2,proportion,fill=Order, col=Order)) +
+  geom_density( stat = "identity", alpha = 0.2)+
+  #geom_line(data = df.data, aes(x = Date2, y= counts, col = Site), linetype = "dashed")+
+  xlab("Date")+
+  ylab("Proportion of Sequence Reads")+
+ # ylim(0,1)+
+  facet_grid(Order ~ . , scales = "free") +
+  theme_bw() +   # remove grey background
+  theme(legend.position="none")+
+  theme(strip.text.x = element_text(size=8, ),
+          strip.text.y = element_text(size=12, face="italic", angle=0),
+          strip.background = element_rect(colour="black", fill="#CCCCFF"))+
+  scale_fill_manual(values= colours29)+
+  scale_colour_manual(values= colours29)+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=8,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+        axis.text.y = element_text(colour="grey20",size=8,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+        axis.title.x = element_text(colour="grey20",size=12,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+        axis.title.y = element_text(colour="grey20",size=12,angle=90,hjust=.5,vjust=.5,face="plain")) #vertical axis label, grey, size 20, no angle etc.
+
+P2
+```
+
+
+This data does not contains biological replicates (one sample was collected at each time point). If biological replicates are available variation between the replicates can be measured.
+
+Using the summarize function here we calculated the average proportion of sequences, the variance and standard deviation at each height across all Oder how this can be done with biological replicates to obtain more meaningful data. 
+
+
+```{r}
+## summary statistcs with all data
+
+OTUdata$Index<-rownames(OTUdata)
+OTUt.prop <- merge(meta, OTUdata, by.y = 'Index', by.x = "SampleID", all=FALSE)
+
+# check for errors in merging data by looking for missing data
+sum(is.na(OTUt.prop$Date)) # 0 missing data 
+
+```
+make data frame with all taxa into a long format and statistical analysis 
+Here we have the OTUs in columns 15 to the Nth column in the data.frame. This should be edited if you change the input file
+
+```{r}
+names(OTUt.prop)
+OTU.long <- gather(OTUt.prop, Taxa, proportion, 24:198, factor_key=TRUE)
+
+names(OTU.long)
+
+OTU.long<-merge(OTU.long, taxalist, by.x = "Taxa", by.y = "OTU")
+
+
+names(OTU.long)
+
+#summary<-ddply(OTU.long,  .(Date, Time, Date2, Order), summarize,
+ #              average.proportion = mean(proportion, na.rm=TRUE), sd.proportion = (sd(proportion, na.rm=TRUE)),var.proportion = (var(proportion)))
+
+summary<-ddply(OTU.long,  .(SampleID,	Time,	TimeGMT,	Date,	LatitudeN,	LongitudeE,	MinDepth,	MaxDepth_m,	Sample.type,	method,	Min.Size,	Max.Size,	Date2,	year,	yearf,	month,	monthf,	weekday,	yearmonth,	yearmonthf,	week,	day,	jday,	Order), summarize,
+               average.proportion = mean(proportion, na.rm=TRUE), sd.proportion = (sd(proportion, na.rm=TRUE)),var.proportion = (var(proportion)))
+
+
+str(summary)
+```
+
+
+3) Plot summary statistics: average ± the biological variation
+Here we can see that most orders found a lower vertical distances have similar proportion across all replicate trees.
+
+
+```{r}
+P3<-ggplot(summary,aes(x = yearmonthf, y = average.proportion,fill=Order, col=Order, group = Order)) +
+  geom_point(shape = 21, size = 2, alpha = 0.3, position = position_dodge(width = 0.5))+
+  #facet_wrap( ~ site, ncol=3, scales = "free_y")+
+  geom_errorbar(data = summary, aes(x = yearmonthf, y = average.proportion, ymin = average.proportion - var.proportion, ymax = average.proportion + var.proportion, width = 0.7, group = Order),col = "black", position = position_dodge(width = 0.5)) +
+  #geom_errorbar(aes(x = Vertposition, y = average.proportion, ymin = average.proportion - var.proportion, ymax = average.proportion + var.proportion, group = Taxa), col = "black", position = position_dodge(width = 0.3)) +
+  xlab("Date")+
+  ylab("Proportion of Sequence reads")+
+  theme_bw() +   # remove grey background
+  #theme(legend.position="none")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=90,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+  axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+  axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+  axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain"))  #vertical axis label, grey, size 20, no angle etc.  
+
+P3
+
+```
+
+
+
+Here, even with a subset of the data, we can plot the mean variance relationship which shows a postive relationship between the mean proportion of sequences and the variance of the proportion of sequences across all samples i.e. there are many zeros and many low abundant taxa therefore producing lower variance and few taxa present at high proportions. This also suggests that the whole dataset best fits a negative binomial distribution due to many zeros in the dataset, which is common for abundance data. 
+
+
+Simple linear model to support the mean and variance relationship:
+
+
+
+```{r}
+m1<-lm(average.proportion ~ var.proportion, data = summary)
+
+anova(m1)
+summary(m1)
+```
+Make a funtion to add the model to the plot
+```{r}
+lm_eqn = function(m1) {
+  
+  l <- list(a = format(coef(m1)[1], digits = 2),
+            b = format(abs(coef(m1)[2]), digits = 2),
+            r2 = format(summary(m1)$r.squared, digits = 2));
+  
+  if (coef(m1)[2] >= 0)  {
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2,l)
+  } else {
+    eq <- substitute(italic(y) == a - b %.% italic(x)*","~~italic(r)^2~"="~r2,l)    
+  }
+  
+  as.character(as.expression(eq));                 
+}
+```
+
+
+4) Creat a mean variance plot
+
+
+```{r}
+
+P4<-ggplot(summary, aes(x = average.proportion, y = var.proportion)) +
+  geom_point(shape = 21, size = 2, alpha = 0.3)+
+  geom_smooth(method = "lm", se = FALSE)+
+  xlab("Mean proportion")+
+  ylab("Variation of the proportion")+
+   geom_text(aes(x = 0.01, y = 0.002, label = lm_eqn(lm(average.proportion ~ var.proportion))), parse = TRUE, col = "black")+
+    annotate("text",  x = 0.02, y = 0.0018, label="p < 0.0001" )+
+  theme_bw() +   # remove grey background
+  theme(legend.position="none")+
+  theme(panel.grid.minor = element_blank())+   # remove minor lines on plot
+  theme(panel.grid.major = element_blank())+   # remove major lines on plot
+  theme(axis.text.x = element_text(colour="grey20",size=12,angle=0,hjust=.5,vjust=.5,face="plain"),  #horizontal axis text, grey, size 16, no angle etc.
+  axis.text.y = element_text(colour="grey20",size=12,angle=0,hjust=1,vjust=0,face="plain"),     #vertical axis text, grey, size 16, no angle etc.
+  axis.title.x = element_text(colour="grey20",size=14,angle=0,hjust=.5,vjust=0,face="plain"),   #horizontal axis label, grey, size 20, no angle etc.
+  axis.title.y = element_text(colour="grey20",size=14,angle=90,hjust=.5,vjust=.5,face="plain"))  #vertical axis label, grey, size 20, no angle etc.  
+
+P4
+```
+
+
+
+
+What is the distribution of the data?	If your analysis is not taking that into account it’s going to have some poor properties.
+Note that if using presence absence, binomial distribution may be used.
+
+Test for normal distriubtion (qq plots and histograms)
+
+```{r}
+# first convert the data to integers - this means we should multiply by a number so that numbers less than 1 are not changed to 0.
+OTU.long$Quantity.int<-abs(as.integer(OTU.long$proportion*1000))
+
+qqnorm(OTU.long$Quantity.int, main="NormalQ-Q Plot",ylab="Taxa")
+qqnorm(OTU.long$Quantity.int, main="NormalQ-Q Plot",ylab="Taxa")
+
+# test for normality
+shapiro.test(OTU.long$Quantity.int)
+
+hist(OTU.long$Quantity.int) 
+
+```
+Test log normal distribution
+```{r, echo = TRUE}
+
+hist(log(OTU.long$Quantity.int))
+
+```
+Test for poisson distribution
+```{r}
+library(vcd)## loading vcd package
+require(car)
+require(MASS)
+library(fitdistrplus)
+
+# change value to integer for NB and poisson 
+
+
+gf<-goodfit(OTU.long$Quantity.int,type= "poisson",method= "MinChisq")
+summary(gf)
+plot(gf,main="Count data vs Poisson distribution")
+
+
+```
+Test for negative binomial distribution
+
+We expect most of the points to be within the blue lines. Due to the strong relationship between the mean and the variance we will test negative binomial distributions in the models.
+```{r, echo = TRUE}
+
+nbinom <- fitdist(OTU.long$Quantity.int, "nbinom")
+
+qqp(OTU.long$Quantity.int, "nbinom", size = nbinom$estimate[[1]], mu = nbinom$estimate[[2]])
+
+
+```
+######
+#plot #
+######
+
+```{r, echo = FALSE}
+# Check to ensure that the samples in meta_table are in the same order as in abund_table
+
+OTUdata<-OTUdata[rownames(meta),]
+
+#remove index (this information is in the row names)
+OTUdata$Index<-NULL
+
+# scale data by 1000 then turn into integer
+OTUdata<-(OTUdata[,] * 1000)
+
+# turn data to integer for model 
+OTUdata[,]<-as.integer(unlist(OTUdata[,]))
+
+```
+
+```{r}
+#str(abund)
+abundmv <- mvabund(OTUdata)
+str(abundmv)
+
+```
+
+Null model
+
+You can use the same functions such as summary and anova with many.glm models
+
+```{r}
+NullM = manyglm(abundmv ~  1, family = "negative binomial",  data=meta)
+
+(NullM)$AICsum
+sum(BIC(NullM))
+
+```
+
+```{r}
+NullPois = manyglm(abundmv ~  1, family = "poisson",  data=meta)
+
+(NullPois)$AICsum
+sum(BIC(NullPois))
+
+```
+Include predictors time, space, depth
+```{r}
+ft = manyglm(abundmv ~  Date  + LatitudeN + LongitudeE +  MaxDepth_m , family = "negative binomial",  data=meta)
+
+# ANOVA 
+anova(ft, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+# provides indication if any of the explanaotry variables should be dropped.
+drop1(ft, test = "Chisq")
+
+```
+Only depth
+```{r}
+ft2 = manyglm(abundmv ~   MaxDepth_m  , family = "negative binomial",  data=meta)
+
+#ANOVA
+anova(ft2, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft2, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+
+drop1(ft2, test = "Chisq")
+
+
+```
+
+Only month (as a factor)
+
+```{r}
+ft3 = manyglm(abundmv ~   monthf , family = "negative binomial",  data=meta)
+
+anova(ft3, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft3, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+drop1(ft3, test = "Chisq")
+
+
+```
+Only Maximum pore size
+```{r}
+ft4 = manyglm(abundmv ~   Max.Size , family = "negative binomial",  data=meta)
+
+anova(ft4, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft4, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+drop1(ft4, test = "Chisq")
+
+
+```
+Only Latitude
+```{r}
+ft5 = manyglm(abundmv ~   LatitudeN , family = "negative binomial",  data=meta)
+
+anova(ft5, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft5, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+
+drop1(ft5, test = "Chisq")
+
+
+```
+Only Longitude
+```{r}
+ft6 = manyglm(abundmv ~   LongitudeE , family = "negative binomial",  data=meta)
+
+anova(ft6, resamp = "montecarlo", test = "LR")
+
+# univariate
+anova.manyglm(ft6, resamp = "montecarlo", test = "LR", p.uni = "adjusted")
+
+
+drop1(ft6, test = "Chisq")
+
+
+```
+
+
+create a table of BIC and AIC scores 
+```{r}
+
+AICscore <- data.frame("Score")
+
+AICscore$NullM <- (NullM)$AICsum
+AICscore$ft <- (ft)$AICsum
+AICscore$ft2 <- (ft2)$AICsum
+AICscore$ft3 <- (ft3)$AICsum
+AICscore$ft4 <- (ft4)$AICsum
+AICscore$ft5 <- (ft5)$AICsum
+AICscore$ft6 <- (ft6)$AICsum
+
+
+AICscore
+#write.csv(AICscore, "../AICscore.csv")
+
+BICscore <- data.frame("Score")
+
+BICscore$NullM <- sum(BIC(NullM))
+BICscore$ft <- sum(BIC(ft))
+
+BICscore$ft2 <- sum(BIC(ft2))
+BICscore$ft3 <- sum(BIC(ft3))
+BICscore$ft4 <- sum(BIC(ft4))
+BICscore$ft5 <- sum(BIC(ft5))
+BICscore$ft6 <- sum(BIC(ft6))
+
+BICscore
+
+#write.csv(BICscore, "../BICscore.csv")
+
+
+```
+The appropriateness of the models can be checked by visual inspection of the residuals against predicted values from the models. 
+
+Little association between residuals suggests that the models selected are plausible and the mean-variance assumption of the negative binomial regression is correct (note you may compared normal distribution of residuals from models using different distribution such as, poisson etc.). Coloured circles denote different genera in the abundance data.  
+```{r, echo = TRUE}
+plot(NullM)
+
+# We expect residuals to be normmaly distributed (test using qqplot).
+plot(NullM, which = 2)
+```
+
+```{r, echo = TRUE}
+#plot(ft)
+#plot(ft, which = 2)
+```
+
+```{r, echo = TRUE}
+plot(ft2)
+plot(ft2, which = 2)
+```
+```{r, echo = TRUE}
+plot(ft3)
+plot(ft3, which = 2)
+```
+```{r, echo = TRUE}
+plot(ft4)
+plot(ft4, which = 2)
+```
+
+```{r, echo = TRUE}
+plot(ft5)
+plot(ft5, which = 2)
+```
+```{r, echo = TRUE}
+plot(ft6)
+plot(ft6, which = 2)
+```
