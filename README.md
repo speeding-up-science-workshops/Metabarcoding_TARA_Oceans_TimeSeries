@@ -10,6 +10,8 @@ Quick Start
 
 Open the binder and then click “knit” this will produce and html document with the Rcode and figures.
 
+Note that there are only four time points associated with this data therefore, whilst it serves as a good example for the code - the analysis are very limited.
+
 Example Output: [Abundance of family over time](Abundance_of_grass_pollen_over_time.png)
 
 Summary
