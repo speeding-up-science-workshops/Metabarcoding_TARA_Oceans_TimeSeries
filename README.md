@@ -1,6 +1,8 @@
 # Metabarcoding_TARA_Oceans_TimeSeries
 Example of visualisations and analysis using a short time series available from Tara Oceans
 
+[![DOI](https://zenodo.org/badge/218647055.svg)](https://zenodo.org/badge/latestdoi/218647055)
+
 RStudio: [![Binder](http://mybinder.org/badge_logo.svg)](http://mybinder.org/v2/gh/G-Brennan/Metabarcoding_group_UCDavis/master?urlpath=rstudio)
 
 Binder: [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/G-Brennan/Metabarcoding_TARA_Oceans_TimeSeries.git/master)
